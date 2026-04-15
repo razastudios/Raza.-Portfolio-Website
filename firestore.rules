@@ -28,7 +28,7 @@ service cloud.firestore {
     }
 
     match /messages/{messageId} {
-      allow read: if isAdmin();
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.senderId == request.auth.uid);
       allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }

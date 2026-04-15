@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { motion, useScroll, useTransform } from "motion/react";
+import { motion, useScroll, useTransform, AnimatePresence } from "motion/react";
 import { 
   Play, 
   CheckCircle2, 
@@ -21,7 +21,8 @@ import {
   Send,
   MessageSquare,
   LogOut,
-  LogIn
+  LogIn,
+  Bell
 } from "lucide-react";
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
@@ -44,6 +45,9 @@ import {
   doc, 
   setDoc, 
   getDoc,
+  query,
+  where,
+  onSnapshot,
   User 
 } from "./firebase";
 
@@ -955,6 +959,76 @@ const Footer = () => {
   );
 };
 
+const UserNotifications = () => {
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [dismissed, setDismissed] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(db, "messages"),
+      where("senderId", "==", user.uid),
+      where("status", "==", "confirmed")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newNotifications = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setNotifications(newNotifications);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const activeNotifications = notifications.filter(n => !dismissed.includes(n.id));
+
+  if (activeNotifications.length === 0) return null;
+
+  return (
+    <div className="fixed bottom-8 right-8 z-[100] flex flex-col gap-4 max-w-md w-full px-4 md:px-0">
+      <AnimatePresence>
+        {activeNotifications.map((notif) => (
+          <motion.div
+            key={notif.id}
+            initial={{ opacity: 0, x: 50, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 50, scale: 0.9 }}
+            className="bg-zinc-900 border border-emerald-500/30 rounded-2xl p-6 shadow-[0_0_30px_rgba(16,185,129,0.1)] backdrop-blur-xl relative overflow-hidden group"
+          >
+            <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
+            
+            <button 
+              onClick={() => setDismissed(prev => [...prev, notif.id])}
+              className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex gap-4">
+              <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center shrink-0">
+                <Bell className="w-6 h-6 text-emerald-500" />
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-bold text-white flex items-center gap-2">
+                  Message Confirmed
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                </h4>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  Dear, <span className="text-emerald-400 font-semibold">{notif.senderName}</span> Your Message Has Been Confirmed By Admin, And We Will Shortly Approach You, Thank You For Choosing Us As Your Trusted Video Editor Partner - Raza Studios
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 const MainSite = () => {
   return (
     <main className="bg-[#050505] text-white selection:bg-orange-500/30 relative overflow-hidden">
@@ -970,6 +1044,7 @@ const MainSite = () => {
       <Testimonials />
       <Contact />
       <Footer />
+      <UserNotifications />
     </main>
   );
 };
