@@ -19,17 +19,123 @@ import {
   Video,
   Zap,
   Send,
-  MessageSquare
+  MessageSquare,
+  LogOut,
+  LogIn
 } from "lucide-react";
-import { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, createContext, useContext } from "react";
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { AdminPortal } from "./components/AdminPortal";
+import { 
+  auth, 
+  db, 
+  googleProvider, 
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged, 
+  collection, 
+  addDoc, 
+  serverTimestamp, 
+  doc, 
+  setDoc, 
+  getDoc,
+  User 
+} from "./firebase";
+
+// Auth Context
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  login: () => Promise<void>;
+  logout: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  return context;
+};
+
+const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        // Store user data in Firestore
+        try {
+          const userRef = doc(db, "users", currentUser.uid);
+          const userSnap = await getDoc(userRef);
+          if (!userSnap.exists()) {
+            await setDoc(userRef, {
+              uid: currentUser.uid,
+              email: currentUser.email,
+              displayName: currentUser.displayName,
+              photoURL: currentUser.photoURL,
+              createdAt: serverTimestamp(),
+            });
+          }
+        } catch (error: any) {
+          console.error("Error storing user data:", error);
+          if (error.message.includes("insufficient permissions")) {
+            console.error('User Store Firestore Error Details:', JSON.stringify({
+              error: error.message,
+              operationType: 'write',
+              path: `users/${currentUser.uid}`,
+              authInfo: {
+                userId: currentUser.uid,
+                email: currentUser.email,
+              }
+            }));
+          }
+        }
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const login = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error: any) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        console.log("Login popup closed by user");
+      } else if (error.code === 'auth/unauthorized-domain') {
+        alert("This domain is not authorized in Firebase. Please add it to your Firebase Console > Authentication > Settings > Authorized domains.");
+      } else {
+        console.error("Login failed", error);
+      }
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const { user, login, logout } = useAuth();
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-lg border-b border-white/5">
@@ -49,6 +155,40 @@ const Navbar = () => {
               {item}
             </a>
           ))}
+          
+          <Link 
+            to="/admin" 
+            className="text-sm font-medium text-[#A0A0A0] hover:text-white transition-colors"
+          >
+            Admin Portal
+          </Link>
+          
+          {user ? (
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <img src={user.photoURL || ""} alt={user.displayName || ""} className="w-8 h-8 rounded-full border border-white/10" />
+                <span className="text-xs font-medium text-white hidden lg:block">{user.displayName}</span>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={logout}
+                className="text-gray-400 hover:text-white hover:bg-white/5 rounded-full"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
+            </div>
+          ) : (
+            <Button 
+              onClick={login}
+              className="bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-full px-6 py-2 text-sm font-semibold"
+            >
+              <LogIn className="w-4 h-4 mr-2" />
+              Login
+            </Button>
+          )}
+
           <a href="#contact">
             <Button className="bg-gradient-orange hover:opacity-90 text-white border-none rounded-full px-7 py-6 font-semibold text-sm glow-orange">
               Hire Me
@@ -69,7 +209,7 @@ const Navbar = () => {
           animate={{ opacity: 1, y: 0 }}
           className="md:hidden bg-black border-b border-white/10 px-6 py-8 flex flex-col gap-6"
         >
-          {["Home", "About", "Work", "Services"].map((item) => (
+          {["Home", "About"].map((item) => (
             <a 
               key={item} 
               href={`#${item.toLowerCase()}`} 
@@ -79,6 +219,36 @@ const Navbar = () => {
               {item}
             </a>
           ))}
+
+          <Link 
+            to="/admin" 
+            className="text-lg font-medium text-gray-400"
+            onClick={() => setIsOpen(false)}
+          >
+            Admin Portal
+          </Link>
+
+          {["Work", "Services"].map((item) => (
+            <a 
+              key={item} 
+              href={`#${item.toLowerCase()}`} 
+              className="text-lg font-medium text-gray-400"
+              onClick={() => setIsOpen(false)}
+            >
+              {item}
+            </a>
+          ))}
+          
+          {user ? (
+            <Button onClick={logout} variant="outline" className="w-full py-6 rounded-full border-white/10 text-white">
+              Logout ({user.displayName})
+            </Button>
+          ) : (
+            <Button onClick={login} className="bg-white/5 text-white border-white/10 rounded-full w-full py-6">
+              Login with Google
+            </Button>
+          )}
+
           <Button className="bg-gradient-orange text-white border-none rounded-full w-full py-6">
             Hire Me
           </Button>
@@ -558,6 +728,69 @@ const Testimonials = () => {
 };
 
 const Contact = () => {
+  const { user, login } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    message: ""
+  });
+
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        name: user.displayName || "",
+        email: user.email || ""
+      }));
+    }
+  }, [user]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      await login();
+      return;
+    }
+
+    if (!formData.message.trim()) return;
+
+    setIsSubmitting(true);
+    const path = "messages";
+    try {
+      await addDoc(collection(db, path), {
+        senderId: user.uid,
+        senderName: formData.name,
+        senderEmail: formData.email,
+        content: formData.message,
+        status: "new",
+        createdAt: serverTimestamp(),
+      });
+      setSubmitted(true);
+      setFormData(prev => ({ ...prev, message: "" }));
+      setTimeout(() => setSubmitted(false), 5000);
+    } catch (error: any) {
+      console.error("Error sending message:", error);
+      if (error.message.includes("insufficient permissions")) {
+        const errInfo = {
+          error: error.message,
+          operationType: 'create',
+          path: path,
+          authInfo: {
+            userId: auth.currentUser?.uid,
+            email: auth.currentUser?.email,
+            emailVerified: auth.currentUser?.emailVerified,
+            isAnonymous: auth.currentUser?.isAnonymous,
+          }
+        };
+        console.error('Firestore Error Details:', JSON.stringify(errInfo));
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <section id="contact" className="py-32 relative overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-radial from-orange-500/5 to-transparent opacity-50" />
@@ -599,26 +832,87 @@ const Contact = () => {
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="p-10 rounded-[40px] glass border-white/10 shadow-2xl"
+            className="p-10 rounded-[40px] glass border-white/10 shadow-2xl relative overflow-hidden"
           >
-            <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Your Name</label>
-                <Input placeholder="John Doe" className="bg-white/5 border-white/10 h-14 rounded-xl focus:border-orange-500/50 transition-colors" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Email Address</label>
-                <Input type="email" placeholder="john@example.com" className="bg-white/5 border-white/10 h-14 rounded-xl focus:border-orange-500/50 transition-colors" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Project Details</label>
-                <Textarea placeholder="Tell me about your footage and vision..." className="bg-white/5 border-white/10 min-h-[150px] rounded-xl focus:border-orange-500/50 transition-colors" />
-              </div>
-              <Button className="w-full bg-gradient-orange hover:opacity-90 text-white h-16 rounded-xl text-lg font-bold glow-orange group">
-                Send Message
-                <Send className="ml-2 w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-              </Button>
-            </form>
+            {submitted ? (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="h-full flex flex-col items-center justify-center text-center py-10"
+              >
+                <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center text-green-500 mb-6">
+                  <CheckCircle2 className="w-10 h-10" />
+                </div>
+                <h3 className="text-2xl font-bold mb-2">Message Sent!</h3>
+                <p className="text-gray-400">Thank you for reaching out. I'll get back to you shortly.</p>
+                <Button 
+                  variant="ghost" 
+                  className="mt-8 text-orange-500 hover:text-orange-400"
+                  onClick={() => setSubmitted(false)}
+                >
+                  Send another message
+                </Button>
+              </motion.div>
+            ) : (
+              <>
+                {!user && (
+                  <div className="absolute inset-0 z-20 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-orange-500/20 flex items-center justify-center text-orange-500 mb-6">
+                      <LogIn className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-2">Login Required</h3>
+                    <p className="text-gray-400 text-sm mb-8">Please sign in to send a message and start your project.</p>
+                    <Button 
+                      onClick={login}
+                      className="bg-gradient-orange text-white rounded-full px-8 py-6 font-bold glow-orange"
+                    >
+                      Sign in with Google
+                    </Button>
+                  </div>
+                )}
+                <form className="space-y-6" onSubmit={handleSubmit}>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Your Name</label>
+                    <Input 
+                      placeholder="John Doe" 
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      className="bg-white/5 border-white/10 h-14 rounded-xl focus:border-orange-500/50 transition-colors" 
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Email Address</label>
+                    <Input 
+                      type="email" 
+                      placeholder="john@example.com" 
+                      value={formData.email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      className="bg-white/5 border-white/10 h-14 rounded-xl focus:border-orange-500/50 transition-colors" 
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">Project Details</label>
+                    <Textarea 
+                      placeholder="Tell me about your footage and vision..." 
+                      value={formData.message}
+                      onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
+                      className="bg-white/5 border-white/10 min-h-[150px] rounded-xl focus:border-orange-500/50 transition-colors" 
+                      required
+                    />
+                  </div>
+                  <Button 
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full bg-gradient-orange hover:opacity-90 text-white h-16 rounded-xl text-lg font-bold glow-orange group"
+                  >
+                    {isSubmitting ? "Sending..." : "Send Message"}
+                    <Send className="ml-2 w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                  </Button>
+                </form>
+              </>
+            )}
           </motion.div>
         </div>
       </div>
@@ -661,7 +955,7 @@ const Footer = () => {
   );
 };
 
-export default function App() {
+const MainSite = () => {
   return (
     <main className="bg-[#050505] text-white selection:bg-orange-500/30 relative overflow-hidden">
       <div className="ambient-glow top-[-200px] right-[-100px]" />
@@ -677,5 +971,18 @@ export default function App() {
       <Contact />
       <Footer />
     </main>
+  );
+};
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<MainSite />} />
+          <Route path="/admin" element={<AdminPortal />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
