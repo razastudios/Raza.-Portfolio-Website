@@ -280,12 +280,12 @@ const Hero = () => {
               <span className="text-gradient">High-Converting Videos</span>
             </h1>
             <p className="text-lg text-[#A0A0A0] max-w-lg mb-8 leading-relaxed">
-              I help creators and brands grow with engaging, scroll-stopping edits that boost retention and performance.
+              We help creators and brands grow with engaging, scroll-stopping edits that boost retention and performance.
             </p>
             <div className="flex flex-wrap items-center gap-4 mb-12">
               <a href="#work">
                 <Button size="lg" className="bg-gradient-orange hover:opacity-90 text-white rounded-full px-8 py-6 text-sm font-semibold glow-orange group">
-                  View My Work
+                  View Our Work
                 </Button>
               </a>
               <a href="#contact">
@@ -469,8 +469,8 @@ const Work = () => {
       <div className="max-w-7xl mx-auto px-6 md:px-16">
         <div className="mb-16">
           <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#FF6A00] mb-4 block">Portfolio</span>
-          <h2 className="text-4xl md:text-5xl font-extrabold mb-4 font-heading">My Work<span className="text-[#FF6A00]">.</span></h2>
-          <p className="text-[#A0A0A0]">A selection of my best edits across various formats.</p>
+          <h2 className="text-4xl md:text-5xl font-extrabold mb-4 font-heading">Our Work<span className="text-[#FF6A00]">.</span></h2>
+          <p className="text-[#A0A0A0]">A selection of our best edits across various formats.</p>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
