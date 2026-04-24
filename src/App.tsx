@@ -826,7 +826,7 @@ const Contact = () => {
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Follow Me</p>
-                  <p className="text-white font-medium">@owaisahmedraza786</p>
+                  <p className="text-white font-medium">@raza.studioworks</p>
                 </div>
               </div>
             </div>
